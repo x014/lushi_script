@@ -1,26 +1,23 @@
 # -*- coding: utf-8 -*-
-import logging
-import random
-import traceback
-
-import pyautogui
-import cv2
-import time
-import numpy as np
 import argparse
+import logging
 import os
-import yaml
-import datetime
-from PIL import Image
+import random
+import time
 from types import SimpleNamespace
 
-from utils.log_util import LogUtil
-from utils.util import BOSS_ID_MAP, find_lushi_window, find_icon_location, find_enemy_location, restart_game, tuple_add, find_relative_loc, \
-    screenshot, find_lushi_raw_window, get_hero_color_by_id
-from utils.images import get_sub_np_array, get_burning_green_circles, get_burning_blue_lines, get_burning_blue_lines, \
-    get_dark_brown_lines
+import cv2
+import numpy as np
+import pyautogui
+import yaml
+
 from utils.battle_ai import BattleAi
-import utils.logging_util
+from utils.images import get_sub_np_array, get_burning_green_circles, get_burning_blue_lines, \
+    get_dark_brown_lines
+from utils.log_util import LogUtil
+from utils.util import BOSS_ID_MAP, find_lushi_window, find_icon_location, find_enemy_location, restart_game, tuple_add, \
+    find_relative_loc, \
+    screenshot, find_lushi_raw_window, get_hero_color_by_id
 
 logger = logging.getLogger()
 
@@ -62,18 +59,19 @@ class Agent:
         self.choice_skill_index = {}  # 抉择技能选择第1个 【尤朵拉、巴林达适用，左0右2】
         self.choice_skill_index2 = {} # 卡扎抉择技能选择第2个【卡扎、雷克萨适用，左中右0、1、2】
         self.battle_time_wait = 1
-        self.states = ['box', 'mercenaries', 'team_lock', 'travel', 'boss_list', 'team_list', 'map_not_ready',
+        self.states = ['box', 'mercenaries', 'mercenaries_select', 'team_lock', 'travel', 'travel_epic', 'boss_list', 'team_list', 'map_not_ready',
                        'goto', 'show', 'teleport', 'start_game', 'member_not_ready', 'not_ready_dots', 'battle_ready',
                        'treasure_list', 'treasure_replace', 'treasure_list2', 'destroy', 'blue_portal', 'boom', 'bonus_loot', 'cursed_treasure', 'visitor_list',
                        'final_reward', 'final_reward2', 'final_confirm', 'close', 'ok', 'done', 'member_not_ready2', 'campfire']
 
         self.load_config(cfg)
-        self.log_util = LogUtil(self.basic.hs_log)
+        # 现在日志多了一层时间命名的文件夹，在LogUtil实现获取最新日志逻辑。这里传进炉石目录
+        self.log_util = LogUtil(self.basic.hs_path)
 
     def new_click(self, arg0=None, arg1=None):
-        if arg0 == None:
+        if arg0 is None:
             pyautogui.click()
-        elif arg1 == None:
+        elif arg1 is None:
             pyautogui.click(arg0[0] + self.fix_x, arg0[1] + self.fix_y)
         else:
             pyautogui.click(arg0 + self.fix_x, arg1 + self.fix_y)
@@ -122,7 +120,6 @@ class Agent:
             del cfg['boss_hero']
         else:
             self.boss_heros = self.heros
-        cfg['hs_log'] = os.path.join(os.path.dirname(cfg['hs_path']), 'Logs', 'Power.log')
         self.basic = SimpleNamespace(**cfg)
         self.stop_at_boss = self.basic.stop_at_boss
         self.fix_x = self.basic.fix_x
@@ -318,7 +315,8 @@ class Agent:
             battle_stratege = self.basic.boss_battle_stratege  # normal, max_dmg, kill_big, kill_min
 
         del self.log_util
-        self.log_util = LogUtil(self.basic.hs_log)
+        # 现在日志多了一层时间命名的文件夹，在LogUtil实现获取最新日志逻辑。这里传进炉石目录
+        self.log_util = LogUtil(self.basic.hs_path)
         game = self.log_util.parse_game()
 
         first_x, mid_x, last_x, y = self.locs.heros
@@ -699,7 +697,7 @@ class Agent:
     def state_handler(self, state, tic, text):
         success, loc, rect = self.check_in_screen(text)
         '''
-        self.states = ['box', 'mercenaries', 'team_lock', 'travel', 'boss_list', 'team_list', 'map_not_ready',
+        self.states = ['box', 'mercenaries', 'mercenaries_select', 'team_lock', 'travel', 'travel_epic','boss_list', 'team_list', 'map_not_ready',
                   'goto', 'show', 'teleport', 'start_game', 'member_not_ready', 'not_ready_dots', 'battle_ready',
                   'treasure_list', 'treasure_replace', 'treasure_list2', 'destroy', 'blue_portal', 'boom', 'bonus_loot', 'cursed_treasure', 'visitor_list',
                   'final_reward', 'final_reward2', 'final_confirm', 'ok', 'close', 'done', 'member_not_ready2', 'campfire']
@@ -709,11 +707,12 @@ class Agent:
                 state = text
                 tic = time.time()
 
-            if state in ['mercenaries', 'box', 'team_lock', 'close', 'ok', 'done']:
+            if state in ['mercenaries', 'mercenaries_select', 'box', 'team_lock', 'close', 'ok', 'done']:
                 logger.info(f'find {state}, try to click')
                 self.new_click(tuple_add(rect, loc))
 
-            if state == 'travel':
+            # 进入旅行点，现在多了一个史诗难度，多了一个新图标。
+            if state in ['travel', 'travel_epic']:
                 logger.info(f'find {state}, try to click')
                 self.surprise_relative_loc = None  # 进地图清空
                 self.new_click(tuple_add(rect, loc))

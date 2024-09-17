@@ -1,4 +1,6 @@
 import logging
+import os
+from datetime import datetime
 from hearthstone.enums import CardType, Zone, GameTag
 from hslog import LogParser, packets
 from hslog.export import EntityTreeExporter
@@ -12,15 +14,44 @@ logger = logging.getLogger()
 
 
 class LogUtil:
-    def __init__(self, log_path):
-        self.log_path = log_path
+    def __init__(self, hs_path):
+        self.hs_path = hs_path
         self.parser = LogParser()
         self.game = None
         # parse 完后可直接拿来用
         self.game_entity = None
 
+    # 获取炉石日志，现在要取到最新的文件夹的日志
+    def get_hs_log(self, hs_path):
+        # 假设 cfg['hs_path'] 已经定义好了
+        logs_folder = os.path.join(os.path.dirname(hs_path), 'Logs')
+
+        # 获取 Logs 文件夹下的所有子目录
+        sub_dirs = [d for d in os.listdir(logs_folder) if os.path.isdir(os.path.join(logs_folder, d))]
+
+        # 筛选出以日期格式命名的文件夹
+        date_sub_dirs = []
+        for subdir in sub_dirs:
+            try:
+                # 尝试将子目录名称转换为 datetime 对象
+                # 注意这里的日期格式是 '2024_08_16_17_36_39'
+                date_sub_dirs.append((datetime.strptime(subdir[len("Hearthstone_"):], '%Y_%m_%d_%H_%M_%S'), subdir))
+            except ValueError:
+                # 如果转换失败，则忽略该子目录
+                continue
+
+        # 如果没有找到任何日期格式的文件夹，则抛出异常或返回 None
+        if not date_sub_dirs:
+            raise ValueError("No date-formatted directories found.")
+
+        # 按照日期排序并获取最新的日期
+        latest_date, latest_dir = max(date_sub_dirs)
+
+        # 构建完整的文件路径
+        return os.path.join(logs_folder, latest_dir, 'Power.log')
+
     def read_log(self):
-        with open(self.log_path, encoding='utf-8') as f:
+        with open(self.get_hs_log(self.hs_path), encoding='utf-8') as f:
             self.parser.read(f)
         self.parser.flush()
         # 最近一场战斗
@@ -84,7 +115,7 @@ class LogUtil:
 
 
 if __name__ == '__main__':
-    path = "C:/var/Hearthstone/Logs/Power.log"
+    path = "C:/var/Hearthstone/"
     hs_log = LogUtil(path)
     game_entity = hs_log.parse_game()
     for i in game_entity.my_hero:
